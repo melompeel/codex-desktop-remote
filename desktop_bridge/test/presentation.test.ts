@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   presentThread,
+  presentThreadMetadata,
   presentThreadDiff,
   resolveThreadMedia,
   resolveThreadResource,
@@ -11,6 +12,15 @@ import {
 } from "../src/domain/presentation.js";
 
 describe("task presentation", () => {
+  it("uses the git repository root when a quick conversation has no cwd", () => {
+    expect(presentThreadMetadata({
+      gitInfo: { repositoryRoot: "C:\\workspace\\demo" },
+    })).toMatchObject({
+      cwd: "C:\\workspace\\demo",
+      cwdGroupLabel: "demo",
+    });
+  });
+
   it("summarizes messages and file changes without sending full diffs", () => {
     const detail = presentThread({
       threadId: "thread-1",

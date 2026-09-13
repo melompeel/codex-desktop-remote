@@ -11,6 +11,8 @@ export type WorkspaceFile = {
   name: string;
   mimeType: string;
   size: number;
+  attachable: boolean;
+  isDirectory: boolean;
 };
 
 const SKIPPED_DIRECTORIES = new Set([
@@ -45,17 +47,36 @@ export async function listWorkspaceFiles(
       const absolutePath = resolve(directory, entry.name);
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
-        if (!SKIPPED_DIRECTORIES.has(entry.name.toLowerCase())) pending.push(absolutePath);
+        if (SKIPPED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
+        const relativePath = relative(root, absolutePath).split(sep).join("/");
+        if (!needle || relativePath.toLowerCase().includes(needle)) {
+          files.push({
+            relativePath,
+            name: entry.name,
+            mimeType: "inode/directory",
+            size: 0,
+            attachable: false,
+            isDirectory: true,
+          });
+        }
+        pending.push(absolutePath);
         continue;
       }
       if (!entry.isFile()) continue;
       const mimeType = supportedAttachmentMimeType(entry.name);
-      if (!mimeType) continue;
       const relativePath = relative(root, absolutePath).split(sep).join("/");
       if (needle && !relativePath.toLowerCase().includes(needle)) continue;
       const metadata = await stat(absolutePath).catch(() => null);
-      if (!metadata || metadata.size <= 0 || metadata.size > MAX_ATTACHMENT_BYTES) continue;
-      files.push({ relativePath, name: entry.name, mimeType, size: metadata.size });
+      if (!metadata) continue;
+      const attachable = Boolean(mimeType) && metadata.size > 0 && metadata.size <= MAX_ATTACHMENT_BYTES;
+      files.push({
+        relativePath,
+        name: entry.name,
+        mimeType: mimeType ?? "application/octet-stream",
+        size: metadata.size,
+        attachable,
+        isDirectory: false,
+      });
     }
   }
   return files;

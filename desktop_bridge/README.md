@@ -51,7 +51,7 @@ New-NetFirewallRule -DisplayName "Codex Remote Bridge" -Direction Inbound -Proto
 - `GET /v1/tasks`、`GET /v1/tasks/:id`：任务列表与精简时间线。
 - `GET /v1/tasks/:id/media/:mediaId`：读取该任务明确展示的本地图片。
 - `GET /v1/tasks/:id/resources/:resourceId`：下载该任务回复中明确引用的本地文件。
-- `GET /v1/tasks/:id/workspace-files`：列出当前任务工作目录内可作为附件的文件。
+- `GET /v1/tasks/:id/workspace-files`：列出当前任务工作目录的文件树数据；目录行使用 `isDirectory`，文件的 `attachable` 字段标记是否可以作为附件导入。
 - `POST /v1/tasks/:id/workspace-attachments`：把选中的工作区文件复制成设备隔离附件。
 - `POST /v1/tasks`：安全创建并交给 Codex Desktop 接管的新任务。
 - `POST /v1/tasks/:id/activate`：验证历史任务后，通过 Windows 深链让 Codex Desktop 载入并接管。

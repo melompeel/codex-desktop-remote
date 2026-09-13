@@ -252,6 +252,8 @@ data class WorkspaceFileDto(
     val name: String,
     val mimeType: String,
     val size: Long,
+    val attachable: Boolean = true,
+    val isDirectory: Boolean = false,
 )
 
 @Serializable

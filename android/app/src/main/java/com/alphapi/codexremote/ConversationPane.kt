@@ -44,6 +44,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AttachFile
@@ -55,8 +57,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Stop
@@ -1192,16 +1192,19 @@ private fun WorkspaceFilePickerDialog(
                                 Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        if (file != null) onSelect(file)
-                                        else expanded = if (node.path in expanded) expanded - node.path else expanded + node.path
+                                        if (file != null && !file.isDirectory) {
+                                            if (file.attachable) onSelect(file)
+                                        } else {
+                                            expanded = if (node.path in expanded) expanded - node.path else expanded + node.path
+                                        }
                                     }
                                     .padding(start = (item.depth * 18).dp, top = 9.dp, bottom = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
                                     if (file == null) {
-                                        if (node.path in expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
-                                    } else Icons.Default.InsertDriveFile,
+                                        if (node.path in expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight
+                                    } else Icons.AutoMirrored.Filled.InsertDriveFile,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
                                 )
@@ -1214,8 +1217,9 @@ private fun WorkspaceFilePickerDialog(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    if (file != null) Text(
-                                        "${file.relativePath} · ${formatBytes(file.size)}",
+                                    if (file != null && !file.isDirectory) Text(
+                                        "${file.relativePath} · ${formatBytes(file.size)}" +
+                                            if (file.attachable) "" else " · 仅展示",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color(0xFF666661),
                                         maxLines = 1,

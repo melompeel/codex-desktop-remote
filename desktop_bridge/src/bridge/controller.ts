@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 
 import type {
   MaterializedTask,
@@ -311,9 +312,9 @@ export class BridgeController {
   async listTaskPage(query: TaskListQuery = {}): Promise<TaskPage> {
     const approvals = this.store.listApprovals();
     const searchTerm = query.searchTerm?.trim().toLocaleLowerCase() ?? "";
-    const live = (query.archived ? [] : this.store.listThreads())
-      .map((thread) => {
-        const metadata = presentThreadMetadata(thread.state);
+    const live = (await Promise.all((query.archived ? [] : this.store.listThreads())
+      .map(async (thread) => {
+        const metadata = await existingWorkspaceMetadata(thread.state);
         const updatedAt = taskUpdatedAt(thread.state);
         return {
           threadId: thread.threadId,
@@ -327,7 +328,7 @@ export class BridgeController {
           ).length,
           ...metadata,
         } satisfies TaskSummary;
-      })
+      })))
       .filter((task) => matchesTaskSearch(task, searchTerm));
     if (!this.catalog) return { tasks: live, nextCursor: null };
     const byId = new Map<string, TaskSummary>(
@@ -350,7 +351,7 @@ export class BridgeController {
         }
         continue;
       }
-      const metadata = presentThreadMetadata(raw);
+      const metadata = await existingWorkspaceMetadata(raw);
       const task: TaskSummary = {
         threadId,
         title: readString(raw.name) ?? readString(raw.preview) ?? "Untitled task",
@@ -471,10 +472,10 @@ export class BridgeController {
     page: TimelinePageOptions = {},
   ): Promise<TaskDetail> {
     const live = this.store.getThread(threadId);
-    if (live) return presentThread(live, page);
+    if (live) return await sanitizeTaskDetail(presentThread(live, page));
     const history = await this.catalog?.readThread?.(threadId);
     if (!history) throw new Error("task-detail-not-found");
-    return presentThread({ threadId, revision: 0, state: history }, page);
+    return await sanitizeTaskDetail(presentThread({ threadId, revision: 0, state: history }, page));
   }
 
   async getTaskMedia(threadId: string, mediaId: string): Promise<ThreadMediaFile> {
@@ -893,6 +894,40 @@ function matchesTaskSearch(task: TaskSummary, searchTerm: string): boolean {
   return [task.title, task.cwd, task.gitInfo?.branch]
     .filter((value): value is string => typeof value === "string")
     .some((value) => value.toLocaleLowerCase().includes(searchTerm));
+}
+
+async function existingWorkspaceMetadata(
+  state: Record<string, unknown>,
+): Promise<ReturnType<typeof presentThreadMetadata>> {
+  const metadata = presentThreadMetadata(state);
+  if (!metadata.cwd || await workspaceDirectoryExists(metadata.cwd)) return metadata;
+  const {
+    cwd: _cwd,
+    cwdGroupKey: _cwdGroupKey,
+    cwdGroupLabel: _cwdGroupLabel,
+    ...withoutWorkspace
+  } = metadata;
+  return withoutWorkspace;
+}
+
+async function sanitizeTaskDetail(detail: TaskDetail): Promise<TaskDetail> {
+  if (!detail.cwd || await workspaceDirectoryExists(detail.cwd)) return detail;
+  const {
+    cwd: _cwd,
+    cwdGroupKey: _cwdGroupKey,
+    cwdGroupLabel: _cwdGroupLabel,
+    ...withoutWorkspace
+  } = detail;
+  return withoutWorkspace;
+}
+
+async function workspaceDirectoryExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code !== "ENOENT" && code !== "ENOTDIR";
+  }
 }
 
 function assertSupportedSettings(

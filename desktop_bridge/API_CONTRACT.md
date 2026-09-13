@@ -244,9 +244,10 @@ MIME/extension mismatches, invalid magic bytes, NUL-containing text, and files o
 Images are delivered as Desktop `localImage` input. Generic files are delivered as the
 Desktop-supported local `mention` input plus an `application` additional-context entry.
 
-`GET /v1/tasks/:threadId/workspace-files?query=<text>` lists up to 150 supported files
-under the task `cwd`, skipping dependency/build directories, symbolic links, unsupported
-formats, and files over 10 MiB. `POST /v1/tasks/:threadId/workspace-attachments` accepts
+`GET /v1/tasks/:threadId/workspace-files?query=<text>` lists up to 150 files under the
+task `cwd`, skipping dependency/build directories and symbolic links. Directory rows
+use `isDirectory: true`; file rows include `attachable`, so unsupported or oversized
+files remain visible in the directory tree but cannot be imported. `POST /v1/tasks/:threadId/workspace-attachments` accepts
 `{ "relativePath": "docs/guide.md", "idempotencyKey": "..." }`, verifies the resolved
 path remains inside that workspace, and copies it into the same device-owned attachment
 store used by phone uploads.

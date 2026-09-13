@@ -21,17 +21,46 @@ describe("workspace files", () => {
     await mkdir(join(root, "src"));
     await mkdir(join(root, "node_modules"));
     await writeFile(join(root, "src", "Main.kt"), "fun main() = Unit\n");
+    await writeFile(join(root, "src", "view.wxml"), "<view />\n");
     await writeFile(join(root, "notes.bin"), Buffer.from([0, 1, 2]));
     await writeFile(join(root, "node_modules", "hidden.ts"), "hidden\n");
 
-    const files = await listWorkspaceFiles(root, "main");
+    const files = await listWorkspaceFiles(root);
 
-    expect(files).toEqual([{
-      relativePath: "src/Main.kt",
-      name: "Main.kt",
-      mimeType: "text/plain",
-      size: 18,
-    }]);
+    expect(files).toEqual([
+      {
+        relativePath: "notes.bin",
+        name: "notes.bin",
+        mimeType: "application/octet-stream",
+        size: 3,
+        attachable: false,
+        isDirectory: false,
+      },
+      {
+        relativePath: "src",
+        name: "src",
+        mimeType: "inode/directory",
+        size: 0,
+        attachable: false,
+        isDirectory: true,
+      },
+      {
+        relativePath: "src/Main.kt",
+        name: "Main.kt",
+        mimeType: "text/plain",
+        size: 18,
+        attachable: true,
+        isDirectory: false,
+      },
+      {
+        relativePath: "src/view.wxml",
+        name: "view.wxml",
+        mimeType: "text/plain",
+        size: 9,
+        attachable: true,
+        isDirectory: false,
+      },
+    ]);
   });
 
   it("reads only supported files contained by the task workspace", async () => {

@@ -933,13 +933,16 @@ function extractCwd(state: Record<string, unknown>): string {
   const thread = asRecord(state.thread);
   const metadata = asRecord(state.metadata);
   const settings = asRecord(state.latestThreadSettings) ?? asRecord(state.threadSettings);
-  return (
+  const direct = (
     readString(state.cwd) ||
     readString(state.workingDirectory) ||
     readString(thread?.cwd) ||
     readString(metadata?.cwd) ||
     readString(settings?.cwd)
   );
+  if (direct) return direct;
+  const gitInfo = asRecord(state.gitInfo) ?? asRecord(asRecord(state.metadata)?.gitInfo);
+  return readString(gitInfo?.repositoryRoot) || readString(gitInfo?.root) || "";
 }
 
 function extractGitInfo(state: Record<string, unknown>): GitInfoSummary | null {

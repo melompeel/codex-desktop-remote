@@ -39,6 +39,9 @@ const FILE_TYPES = new Map<string, ReadonlySet<string>>([
       ".java", ".c", ".h", ".cc", ".cpp", ".hpp", ".rs", ".go", ".swift",
       ".sh", ".ps1", ".html", ".css", ".scss", ".sql", ".toml", ".ini",
       ".cfg", ".gradle", ".properties",
+      ".wxml", ".wxss", ".jsonc", ".vue", ".svelte", ".astro",
+      ".dart", ".rb", ".php", ".bat", ".cmd", ".psm1", ".fish",
+      ".lock", ".gitignore", ".gitattributes", ".editorconfig",
     ]),
   ],
 ]);

@@ -34,7 +34,7 @@ internal fun buildWorkspaceFileTree(files: List<WorkspaceFileDto>): List<FileTre
             val path = parts.take(index + 1).joinToString("/")
             current = current.children.getOrPut(part) { MutableNode(part, path) }
         }
-        current.file = file
+        if (!file.isDirectory) current.file = file
     }
     fun freeze(node: MutableNode): FileTreeNode = FileTreeNode(
         name = node.name,
