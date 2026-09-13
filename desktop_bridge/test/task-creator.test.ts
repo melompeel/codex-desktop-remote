@@ -147,6 +147,24 @@ describe("AppServerTaskCreator", () => {
       threadId: THREAD_ID,
     });
   });
+
+  it("materializes a durable quick conversation without a workspace", async () => {
+    const session = new FakeSession();
+    const activate = vi.fn(async () => undefined);
+    const creator = new AppServerTaskCreator(async () => session, activate);
+
+    await creator.materialize({ mode: "quick", model: "gpt-test", effort: "low" });
+
+    expect(session.calls.map((call) => call.method)).toEqual([
+      "thread/start",
+      "turn/start",
+      "thread/revert",
+      "thread/read",
+      "thread/unsubscribe",
+    ]);
+    expect(session.call("thread/start")?.params).not.toHaveProperty("cwd");
+    expect(session.call("thread/start")?.params).not.toHaveProperty("projectId");
+  });
 });
 
 const THREAD_ID = "01a0705b-c5c1-7d00-95bc-efd02a96789b";

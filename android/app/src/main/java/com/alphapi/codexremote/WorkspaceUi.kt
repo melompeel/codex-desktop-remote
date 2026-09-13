@@ -339,10 +339,12 @@ internal fun NewTaskDialog(
     onCreate: (CreateTaskDraft) -> Unit,
 ) {
     val availableProjects = groups.filter { it.cwd != null }
+    var mode by rememberSaveable { mutableStateOf("project") }
     var projectKey by rememberSaveable {
         mutableStateOf(preferredProjectKey.takeIf { key -> availableProjects.any { it.key == key } } ?: availableProjects.firstOrNull()?.key.orEmpty())
     }
     var prompt by rememberSaveable { mutableStateOf("") }
+    var customCwd by rememberSaveable { mutableStateOf(availableProjects.firstOrNull()?.cwd.orEmpty()) }
     var modelId by rememberSaveable {
         mutableStateOf(models.firstOrNull { it.isDefault }?.id ?: models.firstOrNull()?.id.orEmpty())
     }
@@ -363,12 +365,32 @@ internal fun NewTaskDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     SelectorButton(
-                        title = "项目",
-                        label = project?.name ?: "选择项目",
-                        selectedValue = projectKey,
-                        options = availableProjects.map { it.key to it.name },
-                        onSelect = { projectKey = it },
+                        title = "类型",
+                        label = if (mode == "quick") "快速对话" else "项目任务",
+                        selectedValue = mode,
+                        options = listOf("project" to "项目任务", "quick" to "快速对话"),
+                        onSelect = { mode = it },
                     )
+                    if (mode == "project") {
+                        SelectorButton(
+                            title = "项目",
+                            label = project?.name ?: "选择项目",
+                            selectedValue = projectKey.orEmpty(),
+                            options = availableProjects.map { it.key to it.name },
+                            onSelect = { key ->
+                                projectKey = key
+                                customCwd = availableProjects.firstOrNull { it.key == key }?.cwd.orEmpty()
+                            },
+                        )
+                        OutlinedTextField(
+                            value = customCwd,
+                            onValueChange = { customCwd = it },
+                            label = { Text("电脑目录") },
+                            singleLine = true,
+                            supportingText = { Text("可填写尚未出现在项目列表中的目录") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     androidx.compose.material3.OutlinedTextField(
                         value = prompt,
                         onValueChange = { prompt = it },
@@ -405,9 +427,9 @@ internal fun NewTaskDialog(
         },
         confirmButton = {
             Button(
-                enabled = enabled && !creating && project?.cwd != null && prompt.isNotBlank() && modelId.isNotBlank() && effort.isNotBlank(),
+                enabled = enabled && !creating && (mode == "quick" || customCwd.isNotBlank()) && prompt.isNotBlank() && modelId.isNotBlank() && effort.isNotBlank(),
                 onClick = {
-                    onCreate(CreateTaskDraft(projectKey, requireNotNull(project?.cwd), prompt.trim(), modelId, effort))
+                    onCreate(CreateTaskDraft(mode, projectKey.takeIf { mode == "project" }, customCwd.takeIf { mode == "project" }, prompt.trim(), modelId, effort))
                 },
             ) { Text(if (creating) "正在创建" else "创建") }
         },

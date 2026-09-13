@@ -40,6 +40,21 @@ class WorkspacePresentationTest {
     }
 
     @Test
+    fun buildsNestedWorkspaceFileTreeWithDirectoriesBeforeFiles() {
+        val tree = buildWorkspaceFileTree(
+            listOf(
+                WorkspaceFileDto("src/z.kt", "z.kt", "text/plain", 1),
+                WorkspaceFileDto("README.md", "README.md", "text/markdown", 2),
+                WorkspaceFileDto("src/main/App.kt", "App.kt", "text/plain", 3),
+            ),
+        )
+        assertEquals(listOf("src", "README.md"), tree.map { it.name })
+        assertNull(tree[0].file)
+        assertEquals(listOf("main", "z.kt"), tree[0].children.map { it.name })
+        assertEquals("src/main/App.kt", tree[0].children[0].children.single().file?.relativePath)
+    }
+
+    @Test
     fun parsesAUnifiedDiffIntoFilesHunksAndLineKinds() {
         val parsed = parseUnifiedDiff(
             """diff --git a/app/Main.kt b/app/Main.kt

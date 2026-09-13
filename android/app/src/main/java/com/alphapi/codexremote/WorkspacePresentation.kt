@@ -14,6 +14,41 @@ internal data class ProjectGroup(
     }
 }
 
+internal data class FileTreeNode(
+    val name: String,
+    val path: String,
+    val file: WorkspaceFileDto? = null,
+    val children: List<FileTreeNode> = emptyList(),
+)
+
+internal fun buildWorkspaceFileTree(files: List<WorkspaceFileDto>): List<FileTreeNode> {
+    class MutableNode(val name: String, val path: String) {
+        val children = linkedMapOf<String, MutableNode>()
+        var file: WorkspaceFileDto? = null
+    }
+    val root = MutableNode("", "")
+    files.sortedBy { it.relativePath.lowercase(Locale.ROOT) }.forEach { file ->
+        val parts = file.relativePath.replace('\\', '/').split('/').filter(String::isNotBlank)
+        var current = root
+        parts.forEachIndexed { index, part ->
+            val path = parts.take(index + 1).joinToString("/")
+            current = current.children.getOrPut(part) { MutableNode(part, path) }
+        }
+        current.file = file
+    }
+    fun freeze(node: MutableNode): FileTreeNode = FileTreeNode(
+        name = node.name,
+        path = node.path,
+        file = node.file,
+        children = node.children.values
+            .sortedWith(compareBy<MutableNode>({ it.file != null }, { it.name.lowercase(Locale.ROOT) }))
+            .map(::freeze),
+    )
+    return root.children.values
+        .sortedWith(compareBy<MutableNode>({ it.file != null }, { it.name.lowercase(Locale.ROOT) }))
+        .map(::freeze)
+}
+
 internal fun groupTasksByProject(tasks: List<TaskDto>): List<ProjectGroup> {
     val assigned = linkedMapOf<String, MutableList<TaskDto>>()
     val displayPaths = linkedMapOf<String, String>()

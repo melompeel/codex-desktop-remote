@@ -9,15 +9,16 @@ const BOOTSTRAP_PROMPT =
 type JsonRecord = Record<string, unknown>;
 
 export type MaterializeTaskInput = {
-  cwd: string;
+  cwd?: string;
+  mode?: "project" | "quick";
   model?: string;
   effort?: string;
 };
 
 export type MaterializedTask = {
   threadId: string;
-  projectId: string;
-  permissionProfile: string;
+  projectId?: string;
+  permissionProfile?: string;
 };
 
 export interface AppServerSession {
@@ -49,26 +50,34 @@ export class AppServerTaskCreator {
 
   async materialize(input: MaterializeTaskInput): Promise<MaterializedTask> {
     if (this.creating) throw new Error("task-creation-in-progress");
-    const cwd = input.cwd.trim();
-    if (!cwd) throw new Error("task-cwd-required");
+    const cwd = input.cwd?.trim() ?? "";
+    const mode = input.mode ?? (cwd ? "project" : "quick");
+    if (mode === "project" && !cwd) throw new Error("task-cwd-required");
     this.creating = true;
     let session: AppServerSession | null = null;
     let threadId: string | null = null;
     try {
       session = await this.openSession();
-      const [projects, profiles] = await Promise.all([
-        session.request("project/list", { limit: 100 }),
-        session.request("permissionProfile/list", { cwd, limit: 100 }),
-      ]);
-      const projectId = selectProjectId(projects, cwd);
-      const workspaceProfile = selectAllowedProfile(profiles, ":workspace");
-      const bootstrapProfile =
-        selectAllowedProfile(profiles, ":read-only", false) ?? workspaceProfile;
+      const [projects, profiles] = mode === "project"
+        ? await Promise.all([
+          session.request("project/list", { limit: 100 }),
+          session.request("permissionProfile/list", { cwd, limit: 100 }),
+        ])
+        : [null, null] as const;
+      const workspaceProfile = profiles
+        ? selectAllowedProfile(profiles, ":workspace")
+        : undefined;
+      const bootstrapProfile = profiles
+        ? selectAllowedProfile(profiles, ":read-only", false) ?? workspaceProfile
+        : undefined;
+      const projectId = mode === "project" && projects
+        ? selectProjectId(projects, cwd, false)
+        : undefined;
 
       const started = await session.request("thread/start", compact({
-        cwd,
-        runtimeWorkspaceRoots: [cwd],
+        cwd: cwd || undefined,
         projectId,
+        runtimeWorkspaceRoots: cwd ? [cwd] : undefined,
         model: input.model,
         permissions: workspaceProfile,
         approvalPolicy: "on-request",
@@ -83,7 +92,7 @@ export class AppServerTaskCreator {
 
       const turnStarted = await session.request("turn/start", compact({
         threadId,
-        cwd,
+        cwd: cwd || undefined,
         model: input.model,
         effort: input.effort,
         permissions: bootstrapProfile,
@@ -128,7 +137,11 @@ export class AppServerTaskCreator {
         await bestEffortDelete(session, threadId);
         throw error;
       }
-      return { threadId, projectId, permissionProfile: workspaceProfile };
+      return {
+        threadId,
+        ...(projectId ? { projectId } : {}),
+        ...(workspaceProfile ? { permissionProfile: workspaceProfile } : {}),
+      };
     } catch (error) {
       if (threadId && session) await bestEffortDelete(session, threadId);
       throw error;
@@ -363,7 +376,7 @@ class StdioAppServerSession implements AppServerSession {
   }
 }
 
-function selectProjectId(result: JsonRecord, cwd: string): string {
+function selectProjectId(result: JsonRecord, cwd: string, required = true): string | undefined {
   const projects = Array.isArray(result.data) ? result.data.filter(isRecord) : [];
   const expected = normalizedPath(cwd);
   for (const project of projects) {
@@ -373,7 +386,8 @@ function selectProjectId(result: JsonRecord, cwd: string): string {
       if (id) return id;
     }
   }
-  throw new Error("task-project-not-found");
+  if (required) throw new Error("task-project-not-found");
+  return undefined;
 }
 
 function selectAllowedProfile(result: JsonRecord, id: string): string;

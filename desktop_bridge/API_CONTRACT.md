@@ -118,6 +118,7 @@ The pair is validated against the live model list and affects the next turn.
 
 ```json
 {
+  "mode": "project",
   "cwd": "C:\\known-project",
   "prompt": "Implement the requested change",
   "model": "model-id",
@@ -126,8 +127,11 @@ The pair is validated against the live model list and affects the next turn.
 }
 ```
 
-The model and effort must occur in the live model list, and `cwd` must match a project
-reported by the embedded app-server. The helper materializes and rolls back a bootstrap
+`mode` may be `project` (the default) or `quick`. Project mode accepts any existing
+computer directory in `cwd`; when it is not yet listed as a Codex project, the app-server
+creates the durable thread without a project ID. Quick mode omits `cwd` and creates a
+durable conversation without a workspace. The model and effort must occur in the live
+model list. The helper materializes and rolls back a bootstrap
 turn, leaving a durable zero-turn task, then exits. It never receives the user's prompt.
 After Codex Desktop becomes owner, the Bridge applies model settings and sends the real
 prompt through `codex-ipc`.

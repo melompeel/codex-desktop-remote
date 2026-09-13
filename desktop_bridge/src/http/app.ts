@@ -266,12 +266,13 @@ export function createBridgeApp(
 
   app.post("/v1/tasks", async (request, reply) => {
     const body = asRecord(request.body);
+    const mode = body?.mode === "quick" || body?.mode === "project" ? body.mode : undefined;
     const cwd = readString(body?.cwd);
     const prompt = readString(body?.prompt);
     const model = readString(body?.model);
     const reasoningEffort = readString(body?.reasoningEffort);
     const idempotencyKey = readString(body?.idempotencyKey);
-    if (!cwd || !prompt || !model || !reasoningEffort || !idempotencyKey) {
+    if ((mode === "project" && !cwd) || !prompt || !model || !reasoningEffort || !idempotencyKey) {
       return reply.code(400).send({ error: "invalid-task-create-request" });
     }
     const device = authenticatedDevice(request);
@@ -288,7 +289,8 @@ export function createBridgeApp(
     }
     try {
       const result = await dependencies.controller.createTask({
-        cwd,
+        ...(cwd ? { cwd } : {}),
+        ...(mode ? { mode } : {}),
         prompt,
         model,
         reasoningEffort,

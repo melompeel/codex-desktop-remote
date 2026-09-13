@@ -278,8 +278,9 @@ data class ComposerAttachment(
 )
 
 data class CreateTaskDraft(
-    val projectKey: String,
-    val cwd: String,
+    val mode: String = "project",
+    val projectKey: String? = null,
+    val cwd: String? = null,
     val prompt: String,
     val model: String?,
     val reasoningEffort: String?,

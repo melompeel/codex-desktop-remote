@@ -148,7 +148,8 @@ export interface TaskCreatorPort {
 }
 
 export type CreateTaskInput = {
-  cwd: string;
+  cwd?: string;
+  mode?: "project" | "quick";
   prompt: string;
   model: string;
   reasoningEffort: string;
@@ -377,11 +378,12 @@ export class BridgeController {
     if (!this.control.updateThreadSettings) {
       throw new Error("thread-settings-control-unavailable");
     }
-    const cwd = input.cwd.trim();
+    const cwd = input.cwd?.trim() ?? "";
+    const mode = input.mode ?? (cwd ? "project" : "quick");
     const prompt = input.prompt.trim();
     const model = input.model.trim();
     const effort = input.reasoningEffort.trim();
-    if (!cwd) throw new Error("task-cwd-required");
+    if (mode === "project" && !cwd) throw new Error("task-cwd-required");
     if (!prompt || prompt.length > 100_000 || prompt.includes("\u0000")) {
       throw new Error("invalid-task-prompt");
     }
@@ -390,7 +392,8 @@ export class BridgeController {
     assertSupportedSettings(await this.listModels(), settings);
 
     const materialized = await this.taskCreator.materialize({
-      cwd,
+      ...(cwd ? { cwd } : {}),
+      ...(input.mode ? { mode } : {}),
       model,
       effort,
     });

@@ -55,6 +55,8 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Stop
@@ -1153,6 +1155,9 @@ private fun WorkspaceFilePickerDialog(
     onDismiss: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    val tree = remember(files) { buildWorkspaceFileTree(files) }
+    var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
+    val visibleNodes = remember(tree, expanded) { flattenFileTree(tree, expanded) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("电脑文件") },
@@ -1180,27 +1185,43 @@ private fun WorkspaceFilePickerDialog(
                         contentAlignment = Alignment.Center,
                     ) { Text("没有可添加的文件", color = Color(0xFF777772)) }
                     else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
-                        items(files, key = { it.relativePath }) { file ->
-                            Column(
+                        items(visibleNodes, key = { it.node.path }) { item ->
+                            val node = item.node
+                            val file = node.file
+                            Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clickable { onSelect(file) }
-                                    .padding(vertical = 10.dp),
+                                    .clickable {
+                                        if (file != null) onSelect(file)
+                                        else expanded = if (node.path in expanded) expanded - node.path else expanded + node.path
+                                    }
+                                    .padding(start = (item.depth * 18).dp, top = 9.dp, bottom = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(
-                                    file.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                Icon(
+                                    if (file == null) {
+                                        if (node.path in expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
+                                    } else Icons.Default.InsertDriveFile,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
                                 )
-                                Text(
-                                    "${file.relativePath} · ${formatBytes(file.size)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF666661),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                Spacer(Modifier.width(6.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        node.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (file == null) FontWeight.SemiBold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (file != null) Text(
+                                        "${file.relativePath} · ${formatBytes(file.size)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF666661),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                             HorizontalDivider(color = Color(0xFFE5E5E0))
                         }
@@ -1210,6 +1231,23 @@ private fun WorkspaceFilePickerDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
     )
+}
+
+private data class VisibleFileTreeNode(val node: FileTreeNode, val depth: Int)
+
+private fun flattenFileTree(
+    roots: List<FileTreeNode>,
+    expanded: Set<String>,
+): List<VisibleFileTreeNode> {
+    val output = mutableListOf<VisibleFileTreeNode>()
+    fun visit(nodes: List<FileTreeNode>, depth: Int) {
+        nodes.forEach { node ->
+            output += VisibleFileTreeNode(node, depth)
+            if (node.file == null && node.path in expanded) visit(node.children, depth + 1)
+        }
+    }
+    visit(roots, 0)
+    return output
 }
 
 @Composable

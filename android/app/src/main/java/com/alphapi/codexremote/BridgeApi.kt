@@ -201,7 +201,8 @@ class BridgeApi(
 
     suspend fun createTask(draft: CreateTaskDraft): CreateTaskResponse {
         val body = json.encodeToString(buildJsonObject {
-            put("cwd", draft.cwd)
+            put("mode", draft.mode)
+            draft.cwd?.takeIf { it.isNotBlank() }?.let { put("cwd", it) }
             put("prompt", draft.prompt)
             draft.model?.let { put("model", it) }
             draft.reasoningEffort?.let { put("reasoningEffort", it) }
