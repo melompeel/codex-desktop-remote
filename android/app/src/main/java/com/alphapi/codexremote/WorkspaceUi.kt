@@ -1,6 +1,8 @@
 package com.alphapi.codexremote
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +34,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -175,6 +178,7 @@ internal fun filteredProjectGroups(groups: List<ProjectGroup>, selectedKey: Stri
     else -> groups.filter { it.key == selectedKey }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ProjectTaskList(
     groups: List<ProjectGroup>,
@@ -183,7 +187,10 @@ internal fun ProjectTaskList(
     connected: Boolean = true,
     loading: Boolean = false,
     connectionError: String? = null,
+    canOpenOnDesktop: Boolean = false,
     onTaskClick: (TaskDto) -> Unit,
+    onOpenOnDesktop: (TaskDto) -> Unit = {},
+    onResyncTask: (TaskDto) -> Unit = {},
 ) {
     val visibleGroups = remember(groups, selectedKey) { filteredProjectGroups(groups, selectedKey) }
     if (visibleGroups.isEmpty()) {
@@ -232,41 +239,78 @@ internal fun ProjectTaskList(
                 }
             }
             items(group.tasks, key = { it.threadId }) { task ->
-                Card(
-                    onClick = { onTaskClick(task) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (task.threadId == selectedThreadId) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else MaterialTheme.colorScheme.surface,
-                    ),
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                var menuExpanded by remember(task.threadId) { mutableStateOf(false) }
+                Box(Modifier.fillMaxWidth()) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (task.threadId == selectedThreadId) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else MaterialTheme.colorScheme.surface
+                        ),
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("task-card:${task.threadId}")
+                            .combinedClickable(
+                                onClick = { onTaskClick(task) },
+                                onLongClick = { menuExpanded = true },
+                            ),
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(task.title, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            val availability = if (task.ownerAvailable) "桌面已打开" else "历史"
-                            Text(
-                                "$availability  ·  ${statusLabel(task.status)}  ·  待确认 ${task.pendingApprovals}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Box(
-                            modifier = Modifier.size(28.dp),
-                            contentAlignment = Alignment.Center,
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (isActiveTaskStatus(task.status)) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(22.dp)
-                                        .testTag("task-running:${task.threadId}"),
-                                    strokeWidth = 2.5.dp,
+                            Column(Modifier.weight(1f)) {
+                                Text(task.title, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                val availability = if (task.ownerAvailable) "桌面已打开" else "历史"
+                                Text(
+                                    "$availability  ·  ${statusLabel(task.status)}  ·  待确认 ${task.pendingApprovals}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            Box(
+                                modifier = Modifier.size(28.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (isActiveTaskStatus(task.status)) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp)
+                                            .testTag("task-running:${task.threadId}"),
+                                        strokeWidth = 2.5.dp,
+                                    )
+                                }
+                            }
                         }
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        modifier = Modifier.testTag("task-menu:${task.threadId}"),
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("打开会话") },
+                            onClick = {
+                                menuExpanded = false
+                                onTaskClick(task)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("在桌面端打开") },
+                            enabled = canOpenOnDesktop,
+                            onClick = {
+                                menuExpanded = false
+                                onOpenOnDesktop(task)
+                            },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("重新同步会话") },
+                            onClick = {
+                                menuExpanded = false
+                                onResyncTask(task)
+                            },
+                        )
                     }
                 }
             }

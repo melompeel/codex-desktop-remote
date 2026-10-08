@@ -37,6 +37,11 @@ internal class TaskSnapshotCache(
     }
 
     @Synchronized
+    fun clearDetail(connectionKey: String, threadId: String) {
+        detailFile(connectionKey, threadId).delete()
+    }
+
+    @Synchronized
     fun clearConnection(connectionKey: String) {
         connectionDirectory(connectionKey).deleteRecursively()
     }

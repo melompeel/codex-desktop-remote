@@ -914,8 +914,15 @@ private fun TasksPane(
                 connected = state.connected,
                 loading = state.taskListLoading,
                 connectionError = state.error,
+                canOpenOnDesktop = state.connected && state.ipcConnected &&
+                    state.capabilities.taskActivation,
                 onTaskClick = { task ->
                     repository.select(task.threadId)
+                    onOpenDetail()
+                },
+                onOpenOnDesktop = { task -> repository.openOnDesktop(task.threadId) },
+                onResyncTask = { task ->
+                    repository.resyncTask(task.threadId)
                     onOpenDetail()
                 },
             )

@@ -232,6 +232,38 @@ class RemoteRepository private constructor(context: Context) {
     }
 
     fun select(threadId: String) {
+        select(threadId, useCache = true)
+    }
+
+    fun resyncTask(threadId: String) {
+        activeCacheKey()?.let { snapshotCache.clearDetail(it, threadId) }
+        select(threadId, useCache = false)
+    }
+
+    fun openOnDesktop(threadId: String) {
+        val bridge = api ?: run {
+            update { it.copy(error = "Bridge 未连接") }
+            return
+        }
+        if (!mutableState.value.capabilities.taskActivation) {
+            update { it.copy(error = "当前 Bridge 不支持在桌面端打开会话") }
+            return
+        }
+        update {
+            it.copy(
+                activatingThreads = it.activatingThreads + threadId,
+                error = null,
+            )
+        }
+        scope.launch {
+            runCatching { bridge.activateTask(threadId) }
+                .onSuccess { if (api === bridge) scheduleRefresh(0) }
+                .onFailure(::recordError)
+            update { it.copy(activatingThreads = it.activatingThreads - threadId) }
+        }
+    }
+
+    private fun select(threadId: String, useCache: Boolean) {
         val snapshot = mutableState.value
         val openAction = taskOpenAction(
             task = snapshot.tasks.firstOrNull { it.threadId == threadId },
@@ -271,7 +303,7 @@ class RemoteRepository private constructor(context: Context) {
         }
         scope.launch {
             val cacheKey = activeCacheKey()
-            cacheKey?.let { key ->
+            cacheKey?.takeIf { useCache }?.let { key ->
                 snapshotCache.loadDetail(key, threadId)?.let { cached ->
                     if (generation == selectionGeneration) {
                         update { state ->

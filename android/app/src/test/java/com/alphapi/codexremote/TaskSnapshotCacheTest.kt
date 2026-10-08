@@ -40,6 +40,22 @@ class TaskSnapshotCacheTest {
         assertNull(cache.loadDetail("computer", "thread-3"))
     }
 
+    @Test
+    fun clearsOnlyTheRequestedThreadDetail() {
+        val cache = TaskSnapshotCache(temporary.root)
+        val firstTask = task("thread-a", "First")
+        val secondTask = task("thread-b", "Second")
+        cache.saveTasks("computer", listOf(firstTask, secondTask))
+        cache.saveDetail("computer", detail(firstTask))
+        cache.saveDetail("computer", detail(secondTask))
+
+        cache.clearDetail("computer", "thread-a")
+
+        assertNull(cache.loadDetail("computer", "thread-a"))
+        assertEquals("Second reply", cache.loadDetail("computer", "thread-b")?.items?.single()?.text)
+        assertEquals(listOf("thread-a", "thread-b"), cache.loadTasks("computer").map { it.threadId })
+    }
+
     private fun task(id: String, title: String) = TaskDto(
         threadId = id,
         title = title,

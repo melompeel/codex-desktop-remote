@@ -16,7 +16,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.buildJsonArray
@@ -117,6 +119,37 @@ class WorkspaceUiTest {
 
         compose.onNodeWithTag("task-running:active").assertIsDisplayed()
         compose.onAllNodesWithTag("task-running:idle").assertCountEquals(0)
+    }
+
+    @Test
+    fun longPressingATaskShowsConversationActions() {
+        var resyncedThreadId: String? = null
+        compose.setContent {
+            MaterialTheme {
+                ProjectTaskList(
+                    groups = listOf(
+                        ProjectGroup(
+                            key = "project",
+                            name = "Project",
+                            cwd = "C:\\Project",
+                            tasks = listOf(TaskDto("thread-1", "测试会话", "idle", 1, 0, true)),
+                        ),
+                    ),
+                    selectedKey = ProjectGroup.ALL_KEY,
+                    selectedThreadId = null,
+                    canOpenOnDesktop = true,
+                    onTaskClick = {},
+                    onResyncTask = { resyncedThreadId = it.threadId },
+                )
+            }
+        }
+
+        compose.onNodeWithTag("task-card:thread-1").performTouchInput { longClick() }
+        compose.onNodeWithTag("task-menu:thread-1").assertIsDisplayed()
+        compose.onNodeWithText("打开会话").assertIsDisplayed()
+        compose.onNodeWithText("在桌面端打开").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("重新同步会话").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals("thread-1", resyncedThreadId) }
     }
 
     @Test
