@@ -395,6 +395,60 @@ describe("Bridge HTTP API", () => {
     expect(resourceResponse.headers["content-type"]).toContain("text/plain");
   });
 
+  it("downloads DOCX files emitted as Codex file citations", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-remote-docx-citation-"));
+    temporaryRoots.push(root);
+    const documentPath = join(root, "培训清单.docx");
+    await writeFile(documentPath, "docx fixture");
+    const { app, registry, store } = setup();
+    const token = (await registry.issue("device-docx", "Pixel", "android")).token;
+    store.applyStreamChange("thread-docx", {
+      type: "snapshot",
+      revision: 1,
+      conversationState: {
+        turns: [{
+          id: "turn-docx",
+          status: "completed",
+          items: [{
+            id: "message-docx",
+            type: "agentMessage",
+            text: `:codex-file-citation{path="${documentPath}" purpose="output"}`,
+          }],
+        }],
+        requests: [],
+      },
+    });
+
+    const detailPath = "/v1/tasks/thread-docx";
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: detailPath,
+      headers: signedHeaders(token, "GET", detailPath, "", "docx-detail"),
+    });
+    const item = detailResponse.json<{ task: { items: Array<{
+      text: string;
+      resources: Array<{ resourceId: string; mimeType: string }>;
+    }> } }>().task.items[0]!;
+    const resource = item.resources[0]!;
+    expect(item.text).toContain(`codexremote://resource/${resource.resourceId}`);
+    expect(resource.mimeType).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+
+    const resourcePath = `/v1/tasks/thread-docx/resources/${resource.resourceId}`;
+    const resourceResponse = await app.inject({
+      method: "GET",
+      url: resourcePath,
+      headers: signedHeaders(token, "GET", resourcePath, "", "docx-download"),
+    });
+
+    expect(resourceResponse.statusCode).toBe(200);
+    expect(resourceResponse.body).toBe("docx fixture");
+    expect(resourceResponse.headers["content-type"]).toContain(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+  });
+
   it("lists and imports supported files from the current task workspace", async () => {
     const workspaceRoot = await mkdtemp(join(tmpdir(), "codex-remote-workspace-api-"));
     const attachmentRoot = await mkdtemp(join(tmpdir(), "codex-remote-workspace-copy-"));

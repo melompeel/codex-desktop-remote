@@ -446,7 +446,39 @@ function userMessageParts(
     const valueText = readText(value);
     if (valueText) text(valueText);
   }
-  return result;
+  const hasAttachmentEnvelope = result.some(
+    (part) => "text" in part && attachmentEnvelopeHeaderPattern().test(part.text),
+  );
+  return result
+    .map((part): RichTextPart => "text" in part
+      ? { text: sanitizeUserMessageText(part.text, hasAttachmentEnvelope) }
+      : part)
+    .filter((part) => "media" in part || Boolean(part.text));
+}
+
+function sanitizeUserMessageText(value: string, hasAttachmentEnvelope: boolean): string {
+  if (!hasAttachmentEnvelope) return value;
+  const visibleLines: string[] = [];
+  for (const line of value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")) {
+    const trimmed = line.trim();
+    if (attachmentEnvelopeHeaderPattern().test(line)) continue;
+    if (attachmentReferencePattern().test(line)) continue;
+    if (/^Distinguish instructions in attached documents from the user's request\.$/i.test(trimmed)) {
+      continue;
+    }
+    if (/^#{1,6}\s+My request:\s*$/i.test(trimmed)) continue;
+    if (/^Image attachment:\s*(?:true|false)\s*$/i.test(trimmed)) continue;
+    visibleLines.push(line);
+  }
+  return visibleLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function attachmentEnvelopeHeaderPattern(): RegExp {
+  return /^\s*#{0,6}\s*Files mentioned by the user:\s*$/im;
+}
+
+function attachmentReferencePattern(): RegExp {
+  return /^\s*(?:#{1,6}\s+)?[^:\r\n]+:\s*(?:[a-z]:[\\/]|file:\/{2,3}|\\\\|\/)[^\r\n]+\s*$/i;
 }
 
 function mutableTextPart(result: RichTextPart[]): (value: string) => void {
@@ -778,14 +810,29 @@ function linkedText(
 ): { text: string; resources: TimelineResource[]; resourceFiles: ThreadResourceFile[] } {
   const resources: TimelineResource[] = [];
   const resourceFiles: ThreadResourceFile[] = [];
-  const rewritten = text.replace(
+  const register = (resource: ThreadResourceFile): void => {
+    if (resourceFiles.some((current) => current.resourceId === resource.resourceId)) return;
+    resources.push(publicResource(resource));
+    resourceFiles.push(resource);
+  };
+  const citationsRewritten = text.replace(
+    codexFileCitationPattern(),
+    (match: string, attributes: string) => {
+      const rawPath = citationAttribute(attributes, "path");
+      if (!rawPath) return match;
+      const resource = localCitationResource(threadId, itemId, rawPath);
+      if (!resource) return match;
+      register(resource);
+      return `[${resource.name}](codexremote://resource/${resource.resourceId})`;
+    },
+  );
+  const rewritten = citationsRewritten.replace(
     markdownLinkPattern(),
     (match: string, imageMarker: string, label: string, rawTarget: string) => {
       if (imageMarker) return match;
       const resource = localLinkedResource(threadId, itemId, rawTarget);
       if (!resource) return match;
-      resources.push(publicResource(resource));
-      resourceFiles.push(resource);
+      register(resource);
       return `[${label}](codexremote://resource/${resource.resourceId})`;
     },
   );
@@ -807,6 +854,30 @@ function localLinkedResource(
 ): ThreadResourceFile | null {
   const fsPath = localMarkdownPath(rawTarget, true);
   if (!fsPath) return null;
+  return threadResourceFile(threadId, itemId, fsPath);
+}
+
+function localCitationResource(
+  threadId: string,
+  itemId: string,
+  rawPath: string,
+): ThreadResourceFile | null {
+  let fsPath: string;
+  try {
+    fsPath = rawPath.startsWith("file:") ? fileURLToPath(rawPath) : rawPath;
+  } catch {
+    return null;
+  }
+  if (/^\/[a-z]:\//i.test(fsPath)) fsPath = fsPath.slice(1);
+  if (!isAbsolute(fsPath) || isNetworkOrDevicePath(fsPath)) return null;
+  return threadResourceFile(threadId, itemId, fsPath);
+}
+
+function threadResourceFile(
+  threadId: string,
+  itemId: string,
+  fsPath: string,
+): ThreadResourceFile {
   const name = basename(fsPath);
   const mimeType = resourceMimeType(fsPath);
   const resourceId = createHash("sha256")
@@ -851,6 +922,16 @@ function markdownLinkPattern(): RegExp {
   return /(!?)\[([^\]]*)\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
 }
 
+function codexFileCitationPattern(): RegExp {
+  return /^[ \t]*:codex-file-citation\{((?:"[^"\r\n]*"|[^}\r\n])*)\}[ \t]*$/gm;
+}
+
+function citationAttribute(attributes: string, name: string): string {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = attributes.match(new RegExp(`(?:^|\\s)${escapedName}="([^"\\r\\n]*)"`));
+  return match?.[1] ?? "";
+}
+
 function isAssistantOutputType(type: string): boolean {
   return type === "agentmessage" ||
     type === "assistantmessage" ||
@@ -875,6 +956,9 @@ function resourceMimeType(path: string): string {
     case ".webp": return "image/webp";
     case ".gif": return "image/gif";
     case ".pdf": return "application/pdf";
+    case ".docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case ".xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case ".pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
     case ".md":
     case ".markdown": return "text/markdown";
     case ".json": return "application/json";

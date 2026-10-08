@@ -13,8 +13,8 @@ android {
         applicationId = "com.alphapi.codexremote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.5.9"
+        versionCode = 24
+        versionName = "0.5.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
